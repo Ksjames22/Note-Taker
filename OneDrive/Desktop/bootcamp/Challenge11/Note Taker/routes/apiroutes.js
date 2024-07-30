@@ -1,50 +1,59 @@
-
-// dependencies 
+const express = require('express');
 const path = require('path');
-const fs = require('fs')
+const fs = require('fs');
+const app = express();
+const PORT = process.env.PORT || 3000;
 
-// npm package that allows for unique ids to be created
-var uniqid = require('uniqid');
+// Middleware
+app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
+app.use(express.static(path.join(__dirname, 'public')));
 
-
-// routing
-module.exports = (app) => {
-
-  // GET /api/notes should read the db.json file and return all saved notes as JSON.
-  app.get('/api/notes', (req, res) => {
-    res.sendFile(path.join(__dirname, '../db/db.json'));
+// Routes
+app.get('/api/notes', (req, res) => {
+  fs.readFile(path.join(__dirname, 'db/db.json'), 'utf8', (err, data) => {
+    if (err) throw err;
+    res.json(JSON.parse(data));
   });
+});
 
-  // POST /api/notes should receive a new note to save on the request body, 
-  // add it to the db.json file, and then return the new note to the client. 
-  app.post('/api/notes', (req, res) => {
-    let db = fs.readFileSync('db/db.json');
-    db = JSON.parse(db);
-    res.json(db);
-    // creating body for note
-    let userNote = {
-      title: req.body.title,
-      text: req.body.text,
-      // creating unique id for each note
-      id: uniqid(),
-    };
-    // pushing created note to be written in the db.json file
-    db.push(userNote);
-    fs.writeFileSync('db/db.json', JSON.stringify(db));
-    res.json(db);
-
+app.post('/api/notes', (req, res) => {
+  const newNote = req.body;
+  fs.readFile(path.join(__dirname, 'db/db.json'), 'utf8', (err, data) => {
+    if (err) throw err;
+    const notes = JSON.parse(data);
+    newNote.id = Date.now().toString(); // or use a library to generate unique IDs
+    notes.push(newNote);
+    fs.writeFile(path.join(__dirname, 'db/db.json'), JSON.stringify(notes), (err) => {
+      if (err) throw err;
+      res.json(newNote);
+    });
   });
+});
 
+app.delete('/api/notes/:id', (req, res) => {
+  const noteId = req.params.id;
+  fs.readFile(path.join(__dirname, 'db/db.json'), 'utf8', (err, data) => {
+    if (err) throw err;
+    let notes = JSON.parse(data);
+    notes = notes.filter(note => note.id !== noteId);
+    fs.writeFile(path.join(__dirname, 'db/db.json'), JSON.stringify(notes), (err) => {
+      if (err) throw err;
+      res.status(204).send();
+    });
+  });
+});
 
-  // DELETE /api/notes/:id should receive a query parameter containing the id of a note to delete.
-  app.delete('/api/notes/:id', (req, res) => {
-    // reading notes form db.json
-    let db = JSON.parse(fs.readFileSync('db/db.json'))
-    // removing note with id
-    let deleteNotes = db.filter(item => item.id !== req.params.id);
-    // Rewriting note to db.json
-    fs.writeFileSync('db/db.json', JSON.stringify(deleteNotes));
-    res.json(deleteNotes);
-    
-  })
-};
+// HTML Routes
+app.get('/notes', (req, res) => {
+  res.sendFile(path.join(__dirname, 'public/notes.html'));
+});
+
+app.get('*', (req, res) => {
+  res.sendFile(path.join(__dirname, 'public/index.html'));
+});
+
+app.listen(PORT, () => {
+  console.log(`Server is running on port ${PORT}`);
+});
+
